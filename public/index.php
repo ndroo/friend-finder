@@ -1,4 +1,7 @@
 <?php
+include "../settings.php";
+include "../goolk.php";
+
 function generateRandomString($length = 10) {
     $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     $randomString = '';
@@ -25,10 +28,11 @@ if(isset($_REQUEST['friend']))
 <html>
 <head>
 <meta charset="UTF-8"> 
-<meta name = "viewport" content = "width = device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=no;">		
+<meta content='yes' name='apple-mobile-web-app-capable'>
+<meta content='black' name='apple-mobile-web-app-status-bar-style'>
+<meta name = "viewport" content = "width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=no;">		
 <script src="http://okv.mouseofdoom.com/statics/openkeyval.js"></script>
 <script type="text/javascript" src="http://maps.google.com/maps/api/js?v=3.12&sensor=false"></script>
-
 <script type="text/javascript">
 
 var map = null;
@@ -48,6 +52,10 @@ var friendLat = null;
 var friendLng = null;
 var lastPos = null;
 
+var friendTime = null;
+var friendDataTime = null;
+var meTime = null;
+
 function initialize_map()
 {
     var myOptions = {
@@ -58,6 +66,9 @@ function initialize_map()
 }
 function initialize()
 {
+	//prevent memorizing data, else once a value is obtained its never refreshed!
+	window.remoteStorage.setShouldMemoize(false);
+
 	console.log("Location tracking starting...");
 	id = navigator.geolocation.watchPosition(show_position,error,{enableHighAccuracy:true,frequency:3000});
 	console.log("Location tracking started!");
@@ -109,13 +120,15 @@ function show_position(p)
 		marker1.setPosition(pos);
 	}
 
+	meTime = new Date().getTime();
+	//Friend: " + friend + "<br>
+	document.getElementById("me_info").innerHTML = "lat: " +pos.lat().toString().substring(0,6) + " | lng: " +pos.lng().toString().substring(0,6) + "<br>Last update: " + meTime + "<br>me: " + me;
+
 	//if we have the friends lat && lng, then lets map it out
 	if(friendLat != null && friendLng != null)
 	{
 		console.log("Plotting friend...");
-		var friendPos=GetFriendsPos();
-
-		document.getElementById("last_update").innerHTML = "<strong>Friend</strong><br>lat: " + friendLat.substring(0,6) + " | lng: " + friendLng.substring(0,6) + "<br><strong>You</strong><br>lat: " +pos.lat().toString().substring(0,6) + " | lng: " +pos.lng().toString().substring(0,6) + "<br>Last update: " + new Date().getTime() + "<br>Friend: " + friend + "<br>me: " + me;
+		var friendPos = new google.maps.LatLng(friendLat,friendLng);
 
 		//friends location
 		if(marker2 == null)
@@ -171,20 +184,26 @@ function UpdateMyPos(pos)
 	console.log("'me-lat' updated (" + me + "-lat," + pos.lat() + ")");
 	window.remoteStorage.setItem(me + "-lng", pos.lng());
 	console.log("'me-lat' updated (" + me + "-lng," + pos.lng() + ")");
+        var tempTime = new Date().getTime();	
+	window.remoteStorage.setItem(me + "-lastupdate",tempTime);
+	console.log("'me-lastupdate' (" + me + "-lastupdate, "+tempTime+")");
 }
 
+//callback
 function refreshLat(value,key)
 {
 	friendLat = value;
 	console.log("'friend-lat' updated (" + friend + "-lat," + value + ")");
 }
 
+//callback
 function refreshLng(value,key)
 {
 	friendLng = value;	
-	console.log("'friend-lng' updated (" + friend + "-lng," + value + "|" + key + ")");
+	console.log("'friend-lng' updated (" + friend + "-lng," + value + ")");
 }
 
+//called once at the start
 function ConnectToFriend()
 {
 	if(friend != "")
@@ -194,6 +213,7 @@ function ConnectToFriend()
 	}
 }
 
+//callback
 function setFriend(value,key)
 {
 	if(value != null)
@@ -217,28 +237,58 @@ function RefreshFriendData()
 		console.log("Refreshing your friends location");
         	window.remoteStorage.getItem(friend + "-lat", refreshLat);
         	window.remoteStorage.getItem(friend + "-lng", refreshLng);
+
+		//log the last time the friend was updated
+		friendTime = new Date().getTime();
+        	window.remoteStorage.getItem(friend + "-lastupdate", SetFriendDataTime);
+		if(friendLng != null && friendLng != null)
+			document.getElementById("friend_info").innerHTML = "Last checked: " + friendTime + "<br>lat: " + friendLat.substring(0,6) + " | lng: " + friendLng.substring(0,6) + "<br>friend: " + friend; 
 	}
+
 	show_position(lastPos);
-	//do this every 15 seconds
-	setTimeout(RefreshFriendData,1000);
+
+	//do this every 5 seconds
+	setTimeout(RefreshFriendData,5000);
 }
 
-//requests the location of the friend from the central server
-function GetFriendsPos()
+//callback
+function SetFriendDataTime(value,key)
 {
-	var fp =new google.maps.LatLng(friendLat,friendLng);
-	console.log("Friend coords ("+fp.lat()+","+fp.lng()+")");
-	return fp;
+	if(value != null)
+	{
+		document.getElementById("friend_data_time").innerHTML = "Last data: " + value; 
+		console.log("Friend data time updated: " + value);
+	}
 }
+
 </script>
 
 <style>
-	body {font-family: Helvetica;font-size:11pt;padding:0px;margin:0px}
+	body {font-family: Helvetica;font-size:11pt;padding:0px;margin:0px;text-align:center;}
+	.top {height:60%;width:100%;} 
+	.bottom {position:fixed;bottom:0;height:40%;background-color:white;width:100%;border-top:2px solid black;}
+	.info { font-size:10px;}
+	.scroll { overflow-y:scroll;height:100%;}
+	.short-link { margin:5px;}
+	h2 { font-size:14px;margin:2px;padding:0;}
+	hr { margin:0;padding:0;}
 </style>
 </head>
 <body onload="initialize();initialize_map();">
-	<div id="map_canvas" style="width:320px; height:350px"></div>
-Link: http://ff.mouseofdoom.com/?friend=<?php echo $me; ?>
-<div id="last_update"></div>
+<div id="map_canvas" class="top"></div>
+<div class="bottom">
+	<div class="scroll">
+		<?php $short = make_short_url("http://ff.mouseofdoom.com/?friend=$me"); ?>
+		<div class="short-link">Sent to a friend to share: <a href="<?php echo $short; ?>"><?php echo $short; ?></a></div>
+		<hr>
+		<h2>Your Info</h2>
+		<div class="info" id="me_info">Loading...</div>
+		<h2>Friend Info</h2>
+		<div class="info" id="friend_data_time"></div>
+		<div class="info" id="friend_info">
+			Waiting for your friend...
+		</div>
+	</div>
+</div>
 </body>
 </html>
